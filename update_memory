@@ -1,0 +1,45 @@
+from flask import Flask, request, jsonify
+import requests
+import os
+
+app = Flask(__name__)
+
+GITHUB_TOKEN = os.environ['GITHUB_TOKEN']  # store in env
+REPO = 'hechser/Time'
+FILE_PATH = 'memory.json'
+GITHUB_API_URL = f'https://api.github.com/repos/{REPO}/contents/{FILE_PATH}'
+BRANCH = 'main'
+
+@app.route('/update', methods=['POST'])
+def update_memory():
+    new_content = request.json
+    headers = {
+        'Authorization': f'token {GITHUB_TOKEN}',
+        'Accept': 'application/vnd.github.v3+json'
+    }
+
+    # Get current file SHA
+    r = requests.get(GITHUB_API_URL, headers=headers)
+    r.raise_for_status()
+    sha = r.json()['sha']
+
+    # Commit new content
+    update_payload = {
+        'message': f'AI tick update {new_content["tick"]}',
+        'content': encode_to_base64(new_content),
+        'sha': sha,
+        'branch': BRANCH
+    }
+
+    commit = requests.put(GITHUB_API_URL, headers=headers, json=update_payload)
+    commit.raise_for_status()
+    return jsonify({'status': 'success', 'commit': commit.json()})
+
+
+def encode_to_base64(content_dict):
+    import json, base64
+    as_str = json.dumps(content_dict, indent=2)
+    return base64.b64encode(as_str.encode()).decode()
+
+if __name__ == '__main__':
+    app.run(debug=True)
